@@ -1,0 +1,16 @@
+{
+  "appId": "com.rhythm.reminder",
+  "appName": "节律提醒",
+  "webDir": "www",
+  "android": {
+    "backgroundColor": "#0e1116",
+    "allowMixedContent": false,
+    "webContentsDebuggingEnabled": false
+  },
+  "plugins": {
+    "LocalNotifications": {
+      "smallIcon": "ic_stat_bell",
+      "iconColor": "#4CC2FF"
+    }
+  }
+}

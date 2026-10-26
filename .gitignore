@@ -1,0 +1,25 @@
+# ===================== 依赖 =====================
+windows/node_modules/
+android/node_modules/
+
+# ===================== Windows 构建产物（编译后的二进制，体积过大不入库） =====================
+# 源码与构建脚本保留；exe 由 `npm run dist` 在 windows/dist/ 下生成，见 README
+windows/dist/
+
+# ===================== Android 构建产物（编译后的 apk，体积过大不入库） =====================
+# 源码与配置保留；app-debug.apk 由 `npm run build:apk` 生成，见 README
+android/android/.gradle/
+android/android/build/
+android/android/app/build/
+android/android/local.properties
+android/android/.idea/
+android/android/*.iml
+*.apk
+*.exe
+
+# ===================== 系统 / 编辑器 =====================
+.DS_Store
+Thumbs.db
+*.log
+*.tmp
+.wb_tmp/

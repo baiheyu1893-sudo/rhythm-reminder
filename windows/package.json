@@ -1,0 +1,54 @@
+{
+  "name": "rhythm-reminder",
+  "version": "1.0.0",
+  "description": "节律提醒 —— 定时叮咚提醒（Windows 桌面版）",
+  "main": "main.js",
+  "author": "rhythm",
+  "license": "MIT",
+  "scripts": {
+    "start": "electron .",
+    "build": "electron-builder --win"
+  },
+  "devDependencies": {
+    "electron": "^33.2.0",
+    "electron-builder": "^25.1.8"
+  },
+  "build": {
+    "appId": "com.rhythm.reminder",
+    "productName": "节律提醒",
+    "copyright": "Copyright © 2026 rhythm",
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "main.js",
+      "index.html",
+      "assets/**/*",
+      "!assets/mipmap-*",
+      "!assets/drawable-*",
+      "!assets/*.wav",
+      "!assets/ic_launcher_foreground_432.png"
+    ],
+    "electronDownload": {
+      "mirror": "https://npmmirror.com/mirrors/electron/"
+    },
+    "win": {
+      "icon": "assets/icon.ico",
+      "target": [
+        "nsis",
+        "portable"
+      ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "节律提醒"
+    },
+    "portable": {
+      "artifactName": "节律提醒-1.0.0-便携版.exe"
+    }
+  }
+}

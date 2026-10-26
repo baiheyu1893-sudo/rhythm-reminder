@@ -1,0 +1,673 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="theme-color" content="#0e1116">
+<title>节律提醒</title>
+<style>
+  :root{
+    --bg:#0e1116; --card:#161c25; --line:#232c3a;
+    --fg:#e8eef7; --dim:#8b97a8; --accent:#4cc2ff; --amber:#ffb84c; --violet:#c78bff;
+  }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  html,body{height:100%}
+  body{
+    margin:0; background:radial-gradient(1000px 700px at 50% -15%,#1a2634,#0e1116 65%);
+    color:var(--fg);
+    font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei",system-ui,sans-serif;
+    display:flex; justify-content:center; padding:16px;
+  }
+  .app{width:100%;max-width:430px;display:flex;flex-direction:column;gap:14px}
+  h1{font-size:16px;font-weight:600;text-align:center;margin:6px 0 0;letter-spacing:4px;color:var(--dim)}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:18px;padding:18px}
+  .stage{text-align:center}
+  .badge{display:inline-block;font-size:13px;padding:5px 14px;border-radius:999px;background:#1e2a38;color:var(--accent);letter-spacing:1px;transition:background .2s,color .2s}
+  .badge.rest{background:#2b2418;color:var(--amber)}
+  .badge.gap{background:#2a1c33;color:var(--violet)}
+  .badge.idle{background:#1c222c;color:var(--dim)}
+  .big{font-size:62px;font-weight:200;font-variant-numeric:tabular-nums;letter-spacing:2px;margin:14px 0 4px;line-height:1}
+  .sub{font-size:14px;color:var(--dim);height:20px}
+  .bar{height:6px;background:#0d1219;border-radius:99px;overflow:hidden;margin:18px 0 10px}
+  .bar i{display:block;height:100%;width:0%;background:linear-gradient(90deg,#2b8cff,#4cc2ff);border-radius:99px;transition:width .2s linear}
+  .bar i.rest{background:linear-gradient(90deg,#a9761f,#ffb84c)}
+  .meta{display:flex;justify-content:space-between;font-size:12.5px;color:var(--dim);font-variant-numeric:tabular-nums}
+  .controls{display:grid;grid-template-columns:1.4fr 1fr 1fr;gap:10px}
+  button{
+    font:inherit;font-size:15px;padding:14px 8px;border-radius:14px;border:1px solid var(--line);
+    background:#1a222d;color:var(--fg);cursor:pointer;transition:transform .1s,opacity .2s;
+  }
+  button:active{transform:scale(.97)}
+  button.primary{background:linear-gradient(180deg,#2b8cff,#1d6fd0);border-color:#3b9bff;font-weight:600}
+  button:disabled{opacity:.35}
+  .stats{display:flex;gap:10px}
+  .stat{flex:1;background:var(--card);border:1px solid var(--line);border-radius:14px;padding:12px;text-align:center}
+  .stat b{display:block;font-size:22px;font-weight:600;font-variant-numeric:tabular-nums}
+  .stat span{font-size:12px;color:var(--dim)}
+  details{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:0 14px}
+  summary{padding:14px 0;font-size:14px;color:var(--dim);cursor:pointer;list-style:none}
+  summary::-webkit-details-marker{display:none}
+  .row{display:flex;align-items:center;justify-content:space-between;padding:10px 0;border-top:1px solid var(--line);font-size:14px;gap:10px}
+  .row label{color:#c6d0de;flex:1}
+  .row input[type=number]{width:74px;background:#0f1520;border:1px solid var(--line);color:var(--fg);border-radius:9px;padding:8px;font:inherit;text-align:center}
+  .row input[type=range]{width:120px;accent-color:#2b8cff}
+  .row input[type=checkbox]{width:20px;height:20px;accent-color:#2b8cff}
+  .mini{display:flex;gap:8px}
+  .mini button{padding:8px 14px;font-size:13px;border-radius:10px}
+  .hint{font-size:12px;color:var(--dim);padding:12px 0 14px;line-height:1.7;border-top:1px solid var(--line)}
+  .log{font-size:12px;color:var(--dim);max-height:110px;overflow:auto;line-height:1.75;padding:0 4px;font-variant-numeric:tabular-nums}
+</style>
+</head>
+<body>
+<div class="app">
+  <h1>节 律 提 醒</h1>
+
+  <div class="card stage">
+    <div class="badge idle" id="phaseBadge">未开始</div>
+    <div class="big" id="mainTimer">--:--</div>
+    <div class="sub" id="mainLabel">点击下方「开始」</div>
+    <div class="bar"><i id="progFill"></i></div>
+    <div class="meta">
+      <span id="metaLeft">—</span>
+      <span id="metaRight">—</span>
+    </div>
+  </div>
+
+  <div class="controls">
+    <button id="btnStart" class="primary">开始</button>
+    <button id="btnPause" disabled>暂停</button>
+    <button id="btnStop" disabled>停止</button>
+  </div>
+
+  <div class="stats">
+    <div class="stat"><b id="beepCount">0</b><span>本轮已提示次数</span></div>
+    <div class="stat"><b id="cycleCount">0</b><span>已完成大循环</span></div>
+  </div>
+
+  <details>
+    <summary>⚙️ 设置（点击展开）</summary>
+
+    <div class="row">
+      <label>小循环间隔（最短 / 最长，分钟）</label>
+      <div class="mini">
+        <input type="number" id="cfgMin" min="0.1" step="0.5">
+        <input type="number" id="cfgMax" min="0.1" step="0.5">
+      </div>
+    </div>
+
+    <div class="row">
+      <label>间歇倒计时（秒）</label>
+      <input type="number" id="cfgGap" min="1" step="1">
+    </div>
+
+    <div class="row">
+      <label>小循环总时长（分钟）</label>
+      <input type="number" id="cfgSmall" min="1" step="1">
+    </div>
+
+    <div class="row">
+      <label>休息时长（分钟）</label>
+      <input type="number" id="cfgRest" min="1" step="1">
+    </div>
+
+    <div class="row">
+      <label>相邻「叮」之间的间隔（毫秒）</label>
+      <input type="number" id="cfgDouble" min="100" step="50">
+    </div>
+
+    <div class="row">
+      <label>音量</label>
+      <input type="range" id="cfgVol" min="0" max="1" step="0.05">
+    </div>
+
+    <div class="row">
+      <label>声音</label>
+      <input type="checkbox" id="cfgSound">
+    </div>
+
+    <div class="row">
+      <label>振动</label>
+      <input type="checkbox" id="cfgVib">
+    </div>
+
+    <div class="row">
+      <label>试听</label>
+      <div class="mini">
+        <button id="btnTest1">两声</button>
+        <button id="btnTest2">四声</button>
+      </div>
+    </div>
+
+    <div class="hint">
+      小循环：每隔 3~5 分钟随机「叮叮」两声 → 紧接着 10 秒间歇倒计时 → 倒计时结束时再「叮叮」两声 → 继续下一轮。<br>
+      90 分钟后「叮叮叮叮」四声 → 休息 20 分钟 → 再四声 → 开始下一轮大循环。<br>
+      打包版已内置后台保活：Android 前台服务 + 系统级定时提醒（锁屏/杀后台照样响），Windows 托盘常驻 + 系统挂起防护。
+    </div>
+  </details>
+
+  <div class="log" id="log"></div>
+</div>
+
+<script>
+(function(){
+'use strict';
+
+const $ = s => document.querySelector(s);
+
+/* ==================== 配置 ==================== */
+const DEFAULTS = {
+  minMin: 3,        // 小循环最短间隔（分钟）
+  maxMin: 5,        // 小循环最长间隔（分钟）
+  gapSec: 10,       // 间歇倒计时（秒）
+  smallMin: 90,     // 小循环总时长（分钟）
+  restMin: 20,      // 休息时长（分钟）
+  doubleGapMs: 400, // 相邻「叮」之间的间隔
+  vol: 0.6,
+  sound: true,
+  vib: true
+};
+
+let cfg = Object.assign({}, DEFAULTS);
+try {
+  const saved = JSON.parse(localStorage.getItem('rhythm-cfg-v3') || 'null');
+  if (saved) cfg = Object.assign(cfg, saved);
+} catch(e){}
+
+function saveCfg(){
+  try { localStorage.setItem('rhythm-cfg-v3', JSON.stringify(cfg)); } catch(e){}
+}
+
+/* ==================== 声音 ==================== */
+let actx = null;
+function ensureAudio(){
+  if (!actx){
+    const AC = window.AudioContext || window.webkitAudioContext;
+    if (!AC) return null;
+    actx = new AC();
+  }
+  if (actx.state === 'suspended') actx.resume();
+  return actx;
+}
+
+function tone(freq, durMs, delayMs, gainVal){
+  if (!cfg.sound) return;
+  const ac = ensureAudio();
+  if (!ac) return;
+  const t0 = ac.currentTime + (delayMs || 0) / 1000;
+  const osc = ac.createOscillator();
+  const g = ac.createGain();
+  osc.type = 'sine';
+  osc.frequency.setValueAtTime(freq, t0);
+  const peak = Math.max(0.0002, (gainVal === undefined ? cfg.vol : gainVal));
+  g.gain.setValueAtTime(0.0002, t0);
+  g.gain.exponentialRampToValueAtTime(peak, t0 + 0.015);
+  g.gain.exponentialRampToValueAtTime(0.0002, t0 + durMs / 1000);
+  osc.connect(g); g.connect(ac.destination);
+  osc.start(t0);
+  osc.stop(t0 + durMs / 1000 + 0.05);
+}
+
+/* 一次「叮」的音色（两声振荡叠加） */
+function dingOnce(offsetMs){
+  tone(880, 260, offsetMs, cfg.vol);
+  tone(1318, 200, offsetMs + 80, cfg.vol * 0.5);
+}
+
+/* 连响 count 声「叮」 */
+function playDings(count, skipVib){
+  const gap = Math.max(100, cfg.doubleGapMs);
+
+  if (cfg.sound){
+    const ac = ensureAudio();
+    if (ac){
+      for (let i = 0; i < count; i++) dingOnce(i * gap);
+    }
+  }
+
+  if (!skipVib && cfg.vib && navigator.vibrate){
+    const pattern = [];
+    for (let i = 0; i < count; i++){
+      pattern.push(160);
+      if (i < count - 1) pattern.push(gap);
+    }
+    try { navigator.vibrate(pattern); } catch(e){}
+  }
+}
+
+/* 两声「叮叮」：常规提示 */
+function ringSmall(){ playDings(2); }
+
+/* 四声「叮叮叮叮」：阶段节点 */
+function ringBig(){ playDings(4); }
+
+/* ==================== 状态机 ==================== */
+const S = {
+  state: 'idle',      // idle | running | paused
+  phase: 'small',     // small | rest
+  sub: 'wait',        // wait | gap（仅小循环阶段）
+  phaseStart: 0,
+  phaseEnd: 0,
+  nextBeep: 0,        // wait 阶段：下一次提示时间
+  gapEnd: 0,          // gap 阶段：间歇倒计时结束时间
+  beeps: 0,
+  cycles: 0,
+  tickId: null,
+  pausedAt: 0
+};
+
+function randIntervalMs(){
+  const a = Math.max(0.1, Math.min(cfg.minMin, cfg.maxMin));
+  const b = Math.max(a, Math.max(cfg.minMin, cfg.maxMin));
+  const minutes = a + Math.random() * (b - a);
+  return minutes * 60000;
+}
+
+function startCycle(){
+  const now = Date.now();
+  S.phase = 'small';
+  S.sub = 'wait';
+  S.phaseStart = now;
+  S.phaseEnd = now + cfg.smallMin * 60000;
+  S.nextBeep = now + randIntervalMs();
+  S.gapEnd = 0;
+  S.beeps = 0;
+}
+
+function startTicking(){
+  stopTicking();
+  S.tickId = setInterval(tick, 200);
+  tick();
+}
+function stopTicking(){
+  if (S.tickId) { clearInterval(S.tickId); S.tickId = null; }
+}
+
+function tick(){
+  if (S.state !== 'running') return;
+  const now = Date.now();
+
+  if (S.phase === 'small'){
+
+    /* —— 阶段结束优先级最高：四声，进入休息 —— */
+    if (now >= S.phaseEnd){
+      S.phase = 'rest';
+      S.sub = 'wait';
+      S.phaseStart = now;
+      S.phaseEnd = now + cfg.restMin * 60000;
+      S.nextBeep = 0;
+      S.gapEnd = 0;
+      ringBig();
+      log('🕘 小循环结束（' + cfg.smallMin + ' 分钟）→ 四声，开始休息 ' + cfg.restMin + ' 分钟');
+      nativeSync('休息中 · 结束后四声');
+      render();
+      return;
+    }
+
+    /* —— 等待阶段：到点响两声，进入间歇 —— */
+    if (S.sub === 'wait'){
+      if (S.nextBeep && now >= S.nextBeep){
+        ringSmall();
+        S.beeps++;
+        S.sub = 'gap';
+        S.gapEnd = now + Math.max(1, cfg.gapSec) * 1000;
+        log('🔔 两声（第 ' + S.beeps + ' 次）→ ' + cfg.gapSec + ' 秒间歇倒计时');
+        nativeSync('间歇倒计时');
+        render();
+        return;
+      }
+    }
+    /* —— 间歇倒计时结束：再响两声，回到等待 —— */
+    else {
+      if (now >= S.gapEnd){
+        ringSmall();
+        S.beeps++;
+        S.sub = 'wait';
+        S.nextBeep = now + randIntervalMs();
+        log('🔔 间歇结束，再响两声 → 下次约 ' + cfg.minMin + '~' + cfg.maxMin + ' 分钟后再响');
+        nativeSync('小循环进行中');
+        render();
+        return;
+      }
+    }
+
+  } else {
+
+    /* —— 休息结束：四声，开始新一轮大循环 —— */
+    if (now >= S.phaseEnd){
+      ringBig();
+      S.cycles++;
+      startCycle();
+      log('▶ 休息结束 → 四声，大循环第 ' + (S.cycles + 1) + ' 轮开始');
+      nativeSync('小循环进行中');
+      render();
+      return;
+    }
+  }
+
+  render();
+}
+
+/* ==================== 渲染 ==================== */
+function fmt(ms){
+  if (!isFinite(ms)) return '--:--';
+  const s = Math.max(0, Math.ceil(ms / 1000));
+  const m = Math.floor(s / 60);
+  return String(m).padStart(2,'0') + ':' + String(s % 60).padStart(2,'0');
+}
+
+function render(){
+  const now = (S.state === 'paused') ? S.pausedAt : Date.now();
+  const badge = $('#phaseBadge');
+  const timer = $('#mainTimer');
+  const label = $('#mainLabel');
+  const fill  = $('#progFill');
+
+  if (S.state === 'idle'){
+    badge.textContent = '未开始';
+    badge.className = 'badge idle';
+    timer.textContent = '--:--';
+    label.textContent = '点击下方「开始」';
+    fill.style.width = '0%';
+    fill.className = '';
+    $('#metaLeft').textContent = '—';
+    $('#metaRight').textContent = '—';
+    $('#beepCount').textContent = 0;
+    $('#cycleCount').textContent = 0;
+    return;
+  }
+
+  if (S.phase === 'small'){
+    const paused = (S.state === 'paused');
+
+    if (S.sub === 'gap'){
+      badge.className = 'badge gap';
+      badge.textContent = paused ? '已暂停' : '间歇倒计时';
+      timer.textContent = fmt(Math.max(0, S.gapEnd - now));
+      label.textContent = paused ? '暂停中' : '间歇结束将再响两声';
+    } else {
+      badge.className = 'badge';
+      badge.textContent = paused ? '已暂停' : '小循环进行中';
+      const next = S.nextBeep || S.phaseEnd;
+      timer.textContent = fmt(Math.max(0, next - now));
+      label.textContent = paused ? '暂停中' : '距离下一次提醒';
+    }
+
+    const total = Math.max(1, S.phaseEnd - S.phaseStart);
+    const done  = now - S.phaseStart;
+    fill.className = '';
+    fill.style.width = Math.min(100, Math.max(0, done / total * 100)) + '%';
+
+    $('#metaLeft').textContent  = '小循环剩余 ' + fmt(Math.max(0, S.phaseEnd - now));
+    $('#metaRight').textContent = '本轮已提示 ' + S.beeps + ' 次';
+  }
+  else {
+    const paused = (S.state === 'paused');
+    badge.className = 'badge rest';
+    badge.textContent = paused ? '已暂停' : '休息中';
+    timer.textContent = fmt(Math.max(0, S.phaseEnd - now));
+    label.textContent = paused ? '暂停中' : '休息倒计时';
+
+    const total = Math.max(1, S.phaseEnd - S.phaseStart);
+    const done  = now - S.phaseStart;
+    fill.className = 'rest';
+    fill.style.width = Math.min(100, Math.max(0, done / total * 100)) + '%';
+
+    $('#metaLeft').textContent  = '休息剩余 ' + fmt(Math.max(0, S.phaseEnd - now));
+    $('#metaRight').textContent = '结束后响四声';
+  }
+
+  $('#beepCount').textContent  = S.beeps;
+  $('#cycleCount').textContent = S.cycles;
+}
+
+function log(msg){
+  const el = $('#log');
+  const d = new Date();
+  const t = [d.getHours(), d.getMinutes(), d.getSeconds()]
+    .map(n => String(n).padStart(2,'0')).join(':');
+  const div = document.createElement('div');
+  div.textContent = t + '  ' + msg;
+  el.prepend(div);
+  while (el.children.length > 60) el.removeChild(el.lastChild);
+}
+
+function updateButtons(){
+  const st = S.state;
+  $('#btnStart').disabled = (st === 'running');
+  $('#btnStart').textContent = (st === 'paused') ? '继续' : '开始';
+  $('#btnPause').disabled = (st !== 'running');
+  $('#btnStop').disabled  = (st === 'idle');
+}
+
+/* ==================== 原生后台保活（仅打包版 Android 生效） ====================
+   原理：
+   1. 前台服务常驻（带常驻通知）→ 进程不被系统杀死，国产 ROM 不杀后台；
+   2. LocalNotifications 按状态机的绝对时间点向系统 AlarmManager 注册
+      「叮叮」/「叮叮叮叮」提醒（自定义音色 + 振动）→ 锁屏、WebView 被
+      节流甚至进程被回收，提醒照样准时响；
+   3. 请求忽略电池优化 → 避开 Doze 白名单问题。                        */
+const Native = {
+  cap: (typeof Capacitor !== 'undefined') ? Capacitor : null,
+  plugin: null,
+  ln: null,
+  ready: false,
+  seq: 100,
+  pending: [],
+
+  isAndroid(){
+    try { return !!this.cap && this.cap.getPlatform() === 'android'; } catch(e){ return false; }
+  },
+
+  async init(){
+    if (!this.isAndroid()) return;
+    try {
+      this.plugin = this.cap.registerPlugin('RhythmNative');
+      this.ln = this.cap.Plugins.LocalNotifications;
+      await this.plugin.ensureChannels();
+      const perm = await this.ln.requestPermissions();
+      await this.plugin.requestIgnoreBatteryOptimizations();
+      this.ready = true;
+      log('🛡 后台保护已开启：前台服务 + 系统定时提醒（' +
+          (perm && perm.display ? perm.display : '?') + '）');
+    } catch(e){
+      log('⚠ 后台保护初始化失败：' + (e && e.message ? e.message : e));
+    }
+  },
+
+  /* 根据当前状态机推算下一次系统提醒 */
+  computeNext(){
+    if (S.state !== 'running') return null;
+    if (S.phase === 'rest') return { t: S.phaseEnd, type: 'big' };
+    if (S.sub === 'gap')    return { t: S.gapEnd,   type: 'small' };
+    const a = S.nextBeep, b = S.phaseEnd;
+    if (a && b && b <= a) return { t: b, type: 'big' };
+    if (a) return { t: a, type: 'small' };
+    return null;
+  },
+
+  /* 取消全部待触发通知 */
+  async cancelAll(){
+    if (!this.ready) return;
+    if (!this.pending.length) return;
+    try { await this.ln.cancel({ notifications: this.pending }); } catch(e){}
+    this.pending = [];
+  },
+
+  /* 重新注册下一次系统提醒（取消旧的 → 注册新的） */
+  async sync(){
+    if (!this.ready) return;
+    await this.cancelAll();
+    const next = this.computeNext();
+    if (!next) return;
+    const id = this.seq = (this.seq % 900) + 100;
+    try {
+      await this.ln.schedule({ notifications: [{
+        id: id,
+        title: '节律提醒',
+        body: next.type === 'big' ? '叮叮叮叮 —— 阶段节点提醒' : '叮叮 —— 节律提醒',
+        channelId: next.type === 'big' ? 'rhythm-big' : 'rhythm-small',
+        schedule: { at: new Date(next.t), allowWhileIdle: true }
+      }]});
+      this.pending = [{ id: id }];
+    } catch(e){}
+  },
+
+  async startService(){
+    if (!this.ready) return;
+    try { await this.plugin.startForeground(); } catch(e){}
+  },
+
+  async stopService(){
+    if (!this.ready) return;
+    try {
+      await this.cancelAll();
+      await this.plugin.stopForeground();
+    } catch(e){}
+  },
+
+  async setStatus(text){
+    if (!this.ready) return;
+    try { await this.plugin.updateStatus({ text: text }); } catch(e){}
+  }
+};
+
+/* 同步系统提醒 + 更新常驻通知文案（防抖：200ms 内多次调用只执行一次） */
+let syncTimer = null;
+function nativeSync(statusText){
+  if (statusText) Native.setStatus(statusText);
+  if (syncTimer) return;
+  syncTimer = setTimeout(function(){
+    syncTimer = null;
+    Native.sync();
+  }, 200);
+}
+
+/* ==================== 控制 ==================== */
+$('#btnStart').onclick = function(){
+  ensureAudio();
+  keepAwake();
+
+  if (S.state === 'idle'){
+    S.cycles = 0;
+    S.beeps = 0;
+    startCycle();
+    S.state = 'running';
+    startTicking();
+    log('▶ 开始（' + cfg.minMin + '~' + cfg.maxMin + ' 分钟间隔 + ' + cfg.gapSec +
+        ' 秒间歇；小循环 ' + cfg.smallMin + ' 分钟；休息 ' + cfg.restMin + ' 分钟）');
+    Native.startService();
+    nativeSync('小循环进行中');
+  } else if (S.state === 'paused'){
+    const delta = Date.now() - S.pausedAt;
+    S.phaseStart += delta;
+    S.phaseEnd   += delta;
+    if (S.nextBeep) S.nextBeep += delta;
+    if (S.gapEnd)   S.gapEnd   += delta;
+    S.state = 'running';
+    startTicking();
+    log('▶ 继续');
+    Native.startService();
+    nativeSync(null);
+  }
+
+  updateButtons();
+  render();
+};
+
+$('#btnPause').onclick = function(){
+  if (S.state !== 'running') return;
+  S.state = 'paused';
+  S.pausedAt = Date.now();
+  stopTicking();
+  updateButtons();
+  render();
+  log('⏸ 已暂停');
+  Native.stopService();
+  Native.setStatus('已暂停');
+};
+
+$('#btnStop').onclick = function(){
+  stopTicking();
+  S.state = 'idle';
+  S.phase = 'small';
+  S.sub = 'wait';
+  S.nextBeep = 0;
+  S.gapEnd = 0;
+  S.beeps = 0;
+  S.cycles = 0;
+  updateButtons();
+  render();
+  log('⏹ 已停止');
+  Native.stopService();
+};
+
+/* ==================== 屏幕常亮 ==================== */
+let wakeLock = null;
+async function keepAwake(){
+  try{
+    if ('wakeLock' in navigator && !wakeLock){
+      wakeLock = await navigator.wakeLock.request('screen');
+      wakeLock.addEventListener('release', function(){ wakeLock = null; });
+    }
+  }catch(e){}
+}
+document.addEventListener('visibilitychange', function(){
+  if (document.visibilityState === 'visible' && S.state === 'running') keepAwake();
+  if (document.visibilityState === 'visible') nativeSync(null);
+});
+
+/* ==================== 设置面板 ==================== */
+function bindNum(sel, key, min){
+  const el = $(sel);
+  el.value = cfg[key];
+  el.onchange = function(){
+    let v = parseFloat(el.value);
+    if (isNaN(v)) v = DEFAULTS[key];
+    v = Math.max(min, v);
+    cfg[key] = v;
+    el.value = v;
+    saveCfg();
+    nativeSync(null);   // 参数变化后刷新下一次系统提醒
+  };
+}
+
+bindNum('#cfgMin',    'minMin',      0.1);
+bindNum('#cfgMax',    'maxMin',      0.1);
+bindNum('#cfgGap',    'gapSec',      1);
+bindNum('#cfgSmall',  'smallMin',    1);
+bindNum('#cfgRest',   'restMin',     1);
+bindNum('#cfgDouble', 'doubleGapMs', 100);
+
+$('#cfgVol').value = cfg.vol;
+$('#cfgVol').oninput = function(e){
+  cfg.vol = parseFloat(e.target.value);
+  saveCfg();
+};
+
+$('#cfgSound').checked = cfg.sound;
+$('#cfgSound').onchange = function(e){
+  cfg.sound = e.target.checked;
+  saveCfg();
+};
+
+$('#cfgVib').checked = cfg.vib;
+$('#cfgVib').onchange = function(e){
+  cfg.vib = e.target.checked;
+  saveCfg();
+};
+
+$('#btnTest1').onclick = function(){ ensureAudio(); ringSmall(); };
+$('#btnTest2').onclick = function(){ ensureAudio(); ringBig(); };
+
+/* ==================== 初始化 ==================== */
+updateButtons();
+render();
+log('就绪：设置好参数后点「开始」');
+Native.init();
+
+})();
+</script>
+</body>
+</html>
